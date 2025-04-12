@@ -2,7 +2,7 @@ require("dotenv").config();
 const { google } = require("googleapis");
 const path = require("path");
 
-const credentials = JSON.parse(process.env.GOOGLE_CALENDAR_CREDENTIALS_JSON);
+const credentials = require("./google-calendar-key.json");
 
 const auth = new google.auth.GoogleAuth({
   credentials,
