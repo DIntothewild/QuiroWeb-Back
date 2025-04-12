@@ -2,10 +2,10 @@ require("dotenv").config();
 const { google } = require("googleapis");
 const path = require("path");
 
-const CREDENTIALS_PATH = process.env.GOOGLE_CALENDAR_CREDENTIALS;
+const credentials = JSON.parse(process.env.GOOGLE_CALENDAR_CREDENTIALS_JSON);
 
 const auth = new google.auth.GoogleAuth({
-  keyFile: path.resolve(CREDENTIALS_PATH),
+  credentials,
   scopes: ["https://www.googleapis.com/auth/calendar"],
 });
 
