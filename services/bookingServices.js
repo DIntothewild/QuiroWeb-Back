@@ -28,7 +28,6 @@ async function procesarReserva(datos) {
 
   const [date, time] = dateTime.split(" ");
 
-  // Validar duplicados
   const duplicado = await Booking.findOne({
     date,
     time,
@@ -38,7 +37,6 @@ async function procesarReserva(datos) {
     throw new Error("Ya existe una reserva para esta fecha, hora y terapia.");
   }
 
-  // Crear estructura de reserva
   const reserva = new Booking({
     customerName,
     terapiasType,
@@ -51,7 +49,6 @@ async function procesarReserva(datos) {
     comentario: "",
   });
 
-  // Campos personalizados según el tipo de terapia
   switch (terapiasType) {
     case "Quiromasaje":
       reserva.tipoMasaje = extra.tipoMasaje || "";
@@ -71,24 +68,32 @@ async function procesarReserva(datos) {
       break;
   }
 
-  // Guardar en MongoDB
   await reserva.save();
   console.log("✅ Reserva guardada:", reserva);
 
-  // Añadir a Google Calendar
+  // Email y Calendar
+  let calendarLink = "";
   try {
     const calendarResponse = await addEventToCalendar(reserva);
-    console.log("✅ Evento en Google Calendar:", calendarResponse.htmlLink);
-
-    if (email && email.trim() !== "") {
-      console.log("✉️ Enviando email a:", email);
-      await sendCalendarLinkEmail(email, calendarResponse.htmlLink);
-    }
+    calendarLink = calendarResponse.htmlLink;
+    console.log("✅ Evento en Google Calendar:", calendarLink);
   } catch (calendarError) {
     console.error("❌ Error con Google Calendar:", calendarError.message);
   }
 
-  // Enviar WhatsApp si hay teléfono
+  if (email && email.trim() !== "") {
+    try {
+      console.log("✉️ Enviando email a:", email);
+      await sendCalendarLinkEmail(
+        email,
+        calendarLink || "https://calendar.google.com"
+      );
+    } catch (emailError) {
+      console.error("❌ Error al enviar correo:", emailError.message);
+    }
+  }
+
+  // WhatsApp
   if (phoneNumber && phoneNumber.length >= 9) {
     const fullPhone = phoneNumber.startsWith("+")
       ? phoneNumber
