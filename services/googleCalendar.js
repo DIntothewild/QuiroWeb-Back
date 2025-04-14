@@ -68,7 +68,7 @@ async function addEventToCalendar(booking) {
 
   try {
     const response = await calendar.events.insert({
-      calendarId: process.env.GOOGLE_CALENDAR_ID,
+      calendarId: "primary",
       resource: event,
       sendUpdates: "all", // 🔔 Enviar invitación al cliente
     });
