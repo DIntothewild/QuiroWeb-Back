@@ -88,7 +88,7 @@ async function addEventToCalendar(booking) {
     console.log("🔄 Intentando crear evento en Google Calendar...");
     const calendar = await getCalendarClient();
     const response = await calendar.events.insert({
-      calendarId: credentials.client_email, // ✅ este es el id correcto
+      calendarId: process.env.GOOGLE_CALENDAR_ID,
       resource: event,
       sendUpdates: "all", // 🔔 Enviar invitación al cliente
     });
