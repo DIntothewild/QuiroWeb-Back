@@ -1,16 +1,35 @@
 require("dotenv").config();
 const { google } = require("googleapis");
 
-// Usar directamente las variables de entorno
-const auth = new google.auth.JWT({
-  email: process.env.GOOGLE_CLIENT_EMAIL,
-  key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+// Parsear credenciales desde la variable de entorno
+let credentials;
+try {
+  credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+  console.log("✅ Credenciales de Google cargadas correctamente");
+} catch (error) {
+  console.error("❌ Error al parsear credenciales de Google:", error);
+  console.error("Detalles:", error.message);
+  throw new Error("No se pudieron cargar las credenciales de Google");
+}
+
+// Configuración de autenticación usando las credenciales completas
+const auth = new google.auth.GoogleAuth({
+  credentials,
   scopes: ["https://www.googleapis.com/auth/calendar"],
 });
 
-const calendar = google.calendar({ version: "v3", auth });
+// Función para obtener el cliente autorizado
+async function getCalendarClient() {
+  try {
+    const client = await auth.getClient();
+    return google.calendar({ version: "v3", auth: client });
+  } catch (error) {
+    console.error("❌ Error al crear cliente de calendario:", error);
+    throw error;
+  }
+}
 
-// 👉 Función para mejorar la descripción del evento
+// Función para mejorar la descripción del evento
 function formatExtraInfo(booking) {
   if (booking.terapiasType === "Quiromasaje") {
     return `Tipo de masaje: ${booking.tipoMasaje || "No especificado"}`;
@@ -38,7 +57,7 @@ function formatExtraInfo(booking) {
   return "";
 }
 
-// 👉 Función para crear y enviar evento a Google Calendar
+// Función para crear y enviar evento a Google Calendar
 async function addEventToCalendar(booking) {
   const startDateTime = `${booking.date}T${booking.time}:00`;
 
@@ -66,8 +85,10 @@ async function addEventToCalendar(booking) {
   };
 
   try {
+    console.log("🔄 Intentando crear evento en Google Calendar...");
+    const calendar = await getCalendarClient();
     const response = await calendar.events.insert({
-      calendarId: process.env.GOOGLE_CALENDAR_ID || "primary",
+      calendarId: credentials.client_email,
       resource: event,
       sendUpdates: "all", // 🔔 Enviar invitación al cliente
     });
@@ -76,8 +97,18 @@ async function addEventToCalendar(booking) {
     return response.data;
   } catch (error) {
     console.error("❌ Error al crear evento en Google Calendar:", error);
+
+    // Información de diagnóstico mejorada
+    if (error.message) {
+      console.error(`Mensaje de error: ${error.message}`);
+    }
+
+    if (error.code) {
+      console.error(`Código de error: ${error.code}`);
+    }
+
     throw error;
   }
 }
 
-module.exports = { calendar, addEventToCalendar };
+module.exports = { addEventToCalendar };
