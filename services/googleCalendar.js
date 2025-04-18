@@ -88,7 +88,7 @@ async function addEventToCalendar(booking) {
     console.log("🔄 Intentando crear evento en Google Calendar...");
     const calendar = await getCalendarClient();
     const response = await calendar.events.insert({
-      calendarId: process.env.GOOGLE_CALENDAR_ID,
+      calendarId: credentials.client_email, // ✅ este es el id correcto
       resource: event,
       sendUpdates: "all", // 🔔 Enviar invitación al cliente
     });
@@ -97,16 +97,8 @@ async function addEventToCalendar(booking) {
     return response.data;
   } catch (error) {
     console.error("❌ Error al crear evento en Google Calendar:", error);
-
-    // Información de diagnóstico mejorada
-    if (error.message) {
-      console.error(`Mensaje de error: ${error.message}`);
-    }
-
-    if (error.code) {
-      console.error(`Código de error: ${error.code}`);
-    }
-
+    if (error.message) console.error(`Mensaje de error: ${error.message}`);
+    if (error.code) console.error(`Código de error: ${error.code}`);
     throw error;
   }
 }
