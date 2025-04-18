@@ -1,1 +1,8 @@
+# Ignorar archivos de credenciales
+.env
+.env.*         # Para .env.production, .env.development, etc.
+
+# Archivos JSON con claves privadas
 services/google-calendar-key.json
+google-credentials.json
+**/google-calendar-*.json
