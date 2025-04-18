@@ -1,12 +1,10 @@
 require("dotenv").config();
 const { google } = require("googleapis");
-const path = require("path");
 
-const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-
+// Usar directamente las variables de entorno
 const auth = new google.auth.JWT({
-  email: credentials.client_email,
-  key: credentials.private_key,
+  email: process.env.GOOGLE_CLIENT_EMAIL,
+  key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
   scopes: ["https://www.googleapis.com/auth/calendar"],
 });
 
@@ -69,7 +67,7 @@ async function addEventToCalendar(booking) {
 
   try {
     const response = await calendar.events.insert({
-      calendarId: "primary",
+      calendarId: process.env.GOOGLE_CALENDAR_ID || "primary",
       resource: event,
       sendUpdates: "all", // 🔔 Enviar invitación al cliente
     });
