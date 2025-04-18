@@ -1,8 +1,25 @@
-# Ignorar archivos de credenciales
-.env
-.env.*         # Para .env.production, .env.development, etc.
+# ✅ Archivos de configuración privados
+.env*
+*.env
 
-# Archivos JSON con claves privadas
-services/google-calendar-key.json
+# ✅ Archivos de credenciales y claves privadas
+*.pem
+*.key
+*.crt
+*credentials*.json
 google-credentials.json
 **/google-calendar-*.json
+
+# ✅ Carpetas de sistema y logs
+node_modules/
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ✅ Archivos del sistema operativo y editores
+.DS_Store
+.vscode/
+.idea/
+*.swp
