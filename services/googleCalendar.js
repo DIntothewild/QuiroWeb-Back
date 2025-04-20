@@ -1,28 +1,58 @@
 require("dotenv").config();
 const { google } = require("googleapis");
 
-// Parsear credenciales desde la variable de entorno
-let credentials;
-try {
-  credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
-  console.log("✅ Credenciales de Google cargadas correctamente");
-} catch (error) {
-  console.error("❌ Error al parsear credenciales de Google:", error);
-  console.error("Detalles:", error.message);
-  throw new Error("No se pudieron cargar las credenciales de Google");
+// Función para formatear correctamente la clave privada
+function formatPrivateKey(key) {
+  if (!key || typeof key !== "string") return null;
+  // Asegurarse de que la clave tiene los saltos de línea correctos
+  return key.replace(/\\n/g, "\n");
 }
 
-// Configuración de autenticación usando las credenciales completas
-const auth = new google.auth.GoogleAuth({
-  credentials,
-  scopes: ["https://www.googleapis.com/auth/calendar"],
-});
+// Configuración de autenticación
+function getAuth() {
+  // Opción 1: Usar JSON completo si está disponible
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+    try {
+      const credentials = JSON.parse(
+        process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
+      );
+      console.log("✅ Usando credenciales de Google desde JSON completo");
+      return new google.auth.GoogleAuth({
+        credentials,
+        scopes: ["https://www.googleapis.com/auth/calendar"],
+      });
+    } catch (error) {
+      console.error("❌ Error al parsear JSON de credenciales:", error.message);
+      // Continuar con el siguiente método si este falla
+    }
+  }
+
+  // Opción 2: Usar variables individuales
+  const privateKey = formatPrivateKey(process.env.GOOGLE_PRIVATE_KEY);
+  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+
+  if (!privateKey) {
+    console.error("❌ Clave privada no disponible o mal formateada");
+    throw new Error("Clave privada no disponible");
+  }
+
+  if (!clientEmail) {
+    console.error("❌ Email del cliente no disponible");
+    throw new Error("Email del cliente no disponible");
+  }
+
+  console.log(`✅ Usando cuenta de servicio: ${clientEmail}`);
+
+  return new google.auth.JWT(clientEmail, null, privateKey, [
+    "https://www.googleapis.com/auth/calendar",
+  ]);
+}
 
 // Función para obtener el cliente autorizado
 async function getCalendarClient() {
   try {
-    const client = await auth.getClient();
-    return google.calendar({ version: "v3", auth: client });
+    const auth = getAuth();
+    return google.calendar({ version: "v3", auth });
   } catch (error) {
     console.error("❌ Error al crear cliente de calendario:", error);
     throw error;
@@ -87,18 +117,57 @@ async function addEventToCalendar(booking) {
   try {
     console.log("🔄 Intentando crear evento en Google Calendar...");
     const calendar = await getCalendarClient();
+
+    // Verificar que el ID del calendario esté configurado
+    const calendarId = process.env.GOOGLE_CALENDAR_ID;
+    if (!calendarId) {
+      throw new Error("ID del calendario no configurado");
+    }
+
+    console.log(`📅 Usando calendario: ${calendarId}`);
+
     const response = await calendar.events.insert({
-      calendarId: process.env.GOOGLE_CALENDAR_ID,
+      calendarId: calendarId,
       resource: event,
-      sendUpdates: "all", // 🔔 Enviar invitación al cliente
+      sendUpdates: "all", // Enviar invitación al cliente
     });
 
-    console.log("✅ Evento creado:", response.data.htmlLink);
+    console.log("✅ Evento creado en Google Calendar:", response.data.htmlLink);
     return response.data;
   } catch (error) {
     console.error("❌ Error al crear evento en Google Calendar:", error);
-    if (error.message) console.error(`Mensaje de error: ${error.message}`);
-    if (error.code) console.error(`Código de error: ${error.code}`);
+
+    // Mensajes de error más detallados para facilitar depuración
+    if (error.message) {
+      console.error(`Mensaje de error: ${error.message}`);
+
+      if (
+        error.message.includes("permission") ||
+        error.message.includes("Permission")
+      ) {
+        console.error(
+          "🔑 ERROR DE PERMISOS: La cuenta de servicio no tiene acceso al calendario."
+        );
+        console.error(
+          "Asegúrate de compartir el calendario con:",
+          process.env.GOOGLE_CLIENT_EMAIL
+        );
+      }
+
+      if (
+        error.message.includes("not found") ||
+        error.message.includes("Not Found")
+      ) {
+        console.error(
+          "❓ ERROR DE CALENDARIO: El ID de calendario no existe o no es accesible."
+        );
+        console.error(
+          "Verifica que el ID sea correcto:",
+          process.env.GOOGLE_CALENDAR_ID
+        );
+      }
+    }
+
     throw error;
   }
 }
