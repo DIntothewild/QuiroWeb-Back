@@ -117,7 +117,7 @@ async function addEventToCalendar(booking) {
     const calendar = await getCalendarClient();
 
     // CAMBIO CLAVE: Usar explícitamente "wellsflow@gmail.com"
-    const calendarId = "wellsflow@gmail.com";
+    const calendarId = "primary";
     console.log(`📅 Usando calendario: ${calendarId}`);
 
     const response = await calendar.events.insert({
