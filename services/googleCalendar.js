@@ -99,7 +99,9 @@ async function addEventToCalendar(booking) {
     )}\nComentario: ${booking.comentario || "Sin comentarios"}`,
     start: { dateTime: startDateTime, timeZone: "Europe/Madrid" },
     end: { dateTime: endDateTime, timeZone: "Europe/Madrid" },
-    attendees: booking.email ? [{ email: booking.email }] : [],
+    attendees: booking.email
+      ? [{ email: booking.email, responseStatus: "needsAction" }]
+      : [],
   };
 
   try {
