@@ -1,13 +1,13 @@
 require("dotenv").config();
 const { google } = require("googleapis");
 
-// Función para formatear correctamente la clave privada
+// 👉 Función para formatear correctamente la clave privada
 function formatPrivateKey(key) {
   if (!key || typeof key !== "string") return null;
   return key.replace(/\\n/g, "\n");
 }
 
-// Configuración de autenticación
+// 👉 Configuración de autenticación
 function getAuth() {
   // Opción 1: Usar JSON completo si está disponible
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
@@ -15,9 +15,8 @@ function getAuth() {
       const credentials = JSON.parse(
         process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
       );
-      console.log("✅ Usando credenciales de Google desde JSON completo");
+      console.log("✅ Usando credenciales desde JSON completo");
 
-      // ⚠️ IMPORTANTE: Usar JWT en lugar de GoogleAuth
       const clientEmail = credentials.client_email;
       const privateKey = credentials.private_key;
 
@@ -25,22 +24,19 @@ function getAuth() {
         "https://www.googleapis.com/auth/calendar",
       ]);
     } catch (error) {
-      console.error("❌ Error al parsear JSON de credenciales:", error.message);
+      console.error(
+        "❌ Error al parsear GOOGLE_APPLICATION_CREDENTIALS_JSON:",
+        error.message
+      );
     }
   }
 
-  // Opción 2: Usar variables individuales
+  // Opción 2: Usar variables de entorno separadas
   const privateKey = formatPrivateKey(process.env.GOOGLE_PRIVATE_KEY);
   const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
 
-  if (!privateKey) {
-    console.error("❌ Clave privada no disponible o mal formateada");
-    throw new Error("Clave privada no disponible");
-  }
-
-  if (!clientEmail) {
-    console.error("❌ Email del cliente no disponible");
-    throw new Error("Email del cliente no disponible");
+  if (!privateKey || !clientEmail) {
+    throw new Error("❌ Clave privada o email del cliente no disponibles");
   }
 
   console.log(`✅ Usando cuenta de servicio: ${clientEmail}`);
@@ -50,27 +46,25 @@ function getAuth() {
   ]);
 }
 
-// Función para obtener el cliente autorizado
+// 👉 Obtener el cliente de Google Calendar autorizado
 async function getCalendarClient() {
   try {
     const auth = getAuth();
     return google.calendar({ version: "v3", auth });
   } catch (error) {
-    console.error("❌ Error al crear cliente de calendario:", error);
+    console.error("❌ Error al crear cliente de Google Calendar:", error);
     throw error;
   }
 }
 
-// Función para mejorar la descripción del evento
+// 👉 Formatear descripción extra del evento según el tipo de terapia
 function formatExtraInfo(booking) {
   if (booking.terapiasType === "Quiromasaje") {
     return `Tipo de masaje: ${booking.tipoMasaje || "No especificado"}`;
   }
-
   if (booking.terapiasType === "Osteopatía") {
     return `Zona a tratar: ${booking.tipoMasaje || "No especificada"}`;
   }
-
   if (booking.terapiasType === "Entrenamiento personal") {
     try {
       const objetivos = JSON.parse(booking.tipoMasaje);
@@ -85,14 +79,12 @@ function formatExtraInfo(booking) {
       return "Objetivos no disponibles";
     }
   }
-
   return "";
 }
 
-// Función para crear y enviar evento a Google Calendar
+// 👉 Crear y enviar evento a Google Calendar
 async function addEventToCalendar(booking) {
   const startDateTime = `${booking.date}T${booking.time}:00`;
-
   const [startHour, startMinute] = booking.time.split(":").map(Number);
   const endHour = startHour + 1;
   const endDateTime = `${booking.date}T${String(endHour).padStart(
@@ -105,38 +97,36 @@ async function addEventToCalendar(booking) {
     description: `Cliente: ${booking.customerName}\n${formatExtraInfo(
       booking
     )}\nComentario: ${booking.comentario || "Sin comentarios"}`,
-    start: {
-      dateTime: startDateTime,
-      timeZone: "Europe/Madrid",
-    },
-    end: {
-      dateTime: endDateTime,
-      timeZone: "Europe/Madrid",
-    },
+    start: { dateTime: startDateTime, timeZone: "Europe/Madrid" },
+    end: { dateTime: endDateTime, timeZone: "Europe/Madrid" },
     attendees: booking.email ? [{ email: booking.email }] : [],
   };
 
   try {
     console.log("🔄 Intentando crear evento en Google Calendar...");
-    const calendar = await getCalendarClient();
 
-    // 🚨 CAMBIO CRUCIAL: Usar "primary" en lugar de wellsflow@gmail.com
-    const calendarId = "primary";
+    const calendar = await getCalendarClient();
+    const calendarId = process.env.GOOGLE_CALENDAR_ID || "wellssflow@gmail.com";
     console.log(`📅 Usando calendario: ${calendarId}`);
 
     const response = await calendar.events.insert({
-      calendarId: calendarId,
+      calendarId,
       resource: event,
-      sendUpdates: "all", // Enviar invitación al cliente
+      sendUpdates: "all",
     });
 
-    console.log("✅ Evento creado en Google Calendar:", response.data.htmlLink);
+    console.log("✅ Evento creado:", response.data.htmlLink);
     return response.data;
   } catch (error) {
     console.error("❌ Error al crear evento en Google Calendar:", error);
 
-    // Si falla, continuamos con el flujo de la aplicación
-    console.log("⚠️ Continuando sin evento en el calendario");
+    if (error.code === 404) {
+      console.error(
+        "⚠️ El calendario no existe o no está compartido con la cuenta de servicio."
+      );
+    } else if (error.code === 403) {
+      console.error("🚫 Permisos insuficientes para crear eventos.");
+    }
 
     return {
       htmlLink: "https://calendar.google.com",
