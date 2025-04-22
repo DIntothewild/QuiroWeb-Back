@@ -7,25 +7,9 @@ function formatPrivateKey(key) {
   return key.replace(/\\n/g, "\n");
 }
 
-// Configuración de autenticación
+// Configuración de autenticación - CAMBIO IMPORTANTE: SIEMPRE usar JWT
 function getAuth() {
-  // Opción 1: Usar JSON completo si está disponible
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
-    try {
-      const credentials = JSON.parse(
-        process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
-      );
-      console.log("✅ Usando credenciales de Google desde JSON completo");
-      return new google.auth.GoogleAuth({
-        credentials,
-        scopes: ["https://www.googleapis.com/auth/calendar"],
-      });
-    } catch (error) {
-      console.error("❌ Error al parsear JSON de credenciales:", error.message);
-    }
-  }
-
-  // Opción 2: Usar variables individuales
+  // Obtener credenciales
   const privateKey = formatPrivateKey(process.env.GOOGLE_PRIVATE_KEY);
   const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
 
@@ -41,6 +25,7 @@ function getAuth() {
 
   console.log(`✅ Usando cuenta de servicio: ${clientEmail}`);
 
+  // USAR JWT DIRECTAMENTE - Esto es crucial
   return new google.auth.JWT(clientEmail, null, privateKey, [
     "https://www.googleapis.com/auth/calendar",
   ]);
@@ -112,46 +97,57 @@ async function addEventToCalendar(booking) {
     attendees: booking.email ? [{ email: booking.email }] : [],
   };
 
+  // Lista de calendarios a intentar, en orden de prioridad
+  const calendarsToTry = ["primary"];
+
   try {
     console.log("🔄 Intentando crear evento en Google Calendar...");
     const calendar = await getCalendarClient();
 
-    // CAMBIO CLAVE: Usar explícitamente "wellsflow@gmail.com"
-    const calendarId = "wellsflow@gmail.com";
-    console.log(`📅 Usando calendario: ${calendarId}`);
+    // Intento con diferentes calendarios
+    let lastError = null;
 
-    const response = await calendar.events.insert({
-      calendarId: calendarId,
-      resource: event,
-      sendUpdates: "all", // Enviar invitación al cliente
-    });
+    for (const calendarId of calendarsToTry) {
+      try {
+        console.log(`📅 Intentando con calendario: ${calendarId}`);
 
-    console.log("✅ Evento creado en Google Calendar:", response.data.htmlLink);
-    return response.data;
-  } catch (error) {
-    console.error("❌ Error al crear evento en Google Calendar:", error);
+        const response = await calendar.events.insert({
+          calendarId: calendarId,
+          resource: event,
+          sendUpdates: "all",
+        });
 
-    // Si falla, intentemos recuperar con una solución alternativa
-    if (
-      error.message &&
-      (error.message.includes("permission") ||
-        error.message.includes("not found"))
-    ) {
-      console.error(
-        "⚠️ No se pudo crear el evento en el calendario de wellsflow@gmail.com"
-      );
-      console.error(
-        "⚠️ Continuando con el flujo de la aplicación sin el evento en el calendario."
-      );
-
-      // Devolvemos un objeto ficticio para que la aplicación continúe
-      return {
-        htmlLink: "https://calendar.google.com",
-        status: "invitation_only",
-      };
+        console.log(
+          "✅ Evento creado en Google Calendar:",
+          response.data.htmlLink
+        );
+        return response.data;
+      } catch (error) {
+        console.warn(`⚠️ Error con calendario ${calendarId}:`, error.message);
+        lastError = error;
+        // Continuar con el siguiente calendario
+      }
     }
 
-    throw error;
+    // Si todos los intentos fallaron, mostrar un mensaje más explícito
+    throw (
+      lastError || new Error("No se pudo crear el evento en ningún calendario")
+    );
+  } catch (error) {
+    console.error(
+      "❌ Error al crear evento en Google Calendar:",
+      error.message
+    );
+
+    // No detener la aplicación, devolver una respuesta para que siga funcionando
+    console.log("⚠️ Continuando con el flujo sin evento en calendario");
+
+    return {
+      htmlLink: "https://calendar.google.com",
+      status: "limited",
+      id: "eventos-" + Date.now(),
+      error: error.message,
+    };
   }
 }
 
