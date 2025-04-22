@@ -7,9 +7,29 @@ function formatPrivateKey(key) {
   return key.replace(/\\n/g, "\n");
 }
 
-// Configuración de autenticación - CAMBIO IMPORTANTE: SIEMPRE usar JWT
+// Configuración de autenticación
 function getAuth() {
-  // Obtener credenciales
+  // Opción 1: Usar JSON completo si está disponible
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+    try {
+      const credentials = JSON.parse(
+        process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
+      );
+      console.log("✅ Usando credenciales de Google desde JSON completo");
+
+      // ⚠️ IMPORTANTE: Usar JWT en lugar de GoogleAuth
+      const clientEmail = credentials.client_email;
+      const privateKey = credentials.private_key;
+
+      return new google.auth.JWT(clientEmail, null, privateKey, [
+        "https://www.googleapis.com/auth/calendar",
+      ]);
+    } catch (error) {
+      console.error("❌ Error al parsear JSON de credenciales:", error.message);
+    }
+  }
+
+  // Opción 2: Usar variables individuales
   const privateKey = formatPrivateKey(process.env.GOOGLE_PRIVATE_KEY);
   const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
 
@@ -25,7 +45,6 @@ function getAuth() {
 
   console.log(`✅ Usando cuenta de servicio: ${clientEmail}`);
 
-  // USAR JWT DIRECTAMENTE - Esto es crucial
   return new google.auth.JWT(clientEmail, null, privateKey, [
     "https://www.googleapis.com/auth/calendar",
   ]);
@@ -97,56 +116,31 @@ async function addEventToCalendar(booking) {
     attendees: booking.email ? [{ email: booking.email }] : [],
   };
 
-  // Lista de calendarios a intentar, en orden de prioridad
-  const calendarsToTry = ["primary"];
-
   try {
     console.log("🔄 Intentando crear evento en Google Calendar...");
     const calendar = await getCalendarClient();
 
-    // Intento con diferentes calendarios
-    let lastError = null;
+    // 🚨 CAMBIO CRUCIAL: Usar "primary" en lugar de wellsflow@gmail.com
+    const calendarId = "primary";
+    console.log(`📅 Usando calendario: ${calendarId}`);
 
-    for (const calendarId of calendarsToTry) {
-      try {
-        console.log(`📅 Intentando con calendario: ${calendarId}`);
+    const response = await calendar.events.insert({
+      calendarId: calendarId,
+      resource: event,
+      sendUpdates: "all", // Enviar invitación al cliente
+    });
 
-        const response = await calendar.events.insert({
-          calendarId: calendarId,
-          resource: event,
-          sendUpdates: "all",
-        });
-
-        console.log(
-          "✅ Evento creado en Google Calendar:",
-          response.data.htmlLink
-        );
-        return response.data;
-      } catch (error) {
-        console.warn(`⚠️ Error con calendario ${calendarId}:`, error.message);
-        lastError = error;
-        // Continuar con el siguiente calendario
-      }
-    }
-
-    // Si todos los intentos fallaron, mostrar un mensaje más explícito
-    throw (
-      lastError || new Error("No se pudo crear el evento en ningún calendario")
-    );
+    console.log("✅ Evento creado en Google Calendar:", response.data.htmlLink);
+    return response.data;
   } catch (error) {
-    console.error(
-      "❌ Error al crear evento en Google Calendar:",
-      error.message
-    );
+    console.error("❌ Error al crear evento en Google Calendar:", error);
 
-    // No detener la aplicación, devolver una respuesta para que siga funcionando
-    console.log("⚠️ Continuando con el flujo sin evento en calendario");
+    // Si falla, continuamos con el flujo de la aplicación
+    console.log("⚠️ Continuando sin evento en el calendario");
 
     return {
       htmlLink: "https://calendar.google.com",
-      status: "limited",
-      id: "eventos-" + Date.now(),
-      error: error.message,
+      status: "invitation_only",
     };
   }
 }
