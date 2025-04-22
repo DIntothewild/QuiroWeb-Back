@@ -81,17 +81,18 @@ async function procesarReserva(datos) {
     console.error("❌ Error con Google Calendar:", calendarError.message);
   }
 
-  if (email && email.trim() !== "") {
-    try {
-      console.log("✉️ Enviando email a:", email);
-      await sendCalendarLinkEmail(
-        email,
-        calendarLink || "https://calendar.google.com"
-      );
-    } catch (emailError) {
-      console.error("❌ Error al enviar correo:", emailError.message);
-    }
-  }
+  // ❌ Eliminamos envío de email con el enlace, ya que el cliente es invitado automáticamente como attendee
+  // if (email && email.trim() !== "") {
+  //   try {
+  //     console.log("✉️ Enviando email a:", email);
+  //     await sendCalendarLinkEmail(
+  //       email,
+  //       calendarLink || "https://calendar.google.com"
+  //     );
+  //   } catch (emailError) {
+  //     console.error("❌ Error al enviar correo:", emailError.message);
+  //   }
+  // }
 
   // WhatsApp
   if (phoneNumber && phoneNumber.length >= 9) {
