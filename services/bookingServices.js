@@ -2,6 +2,8 @@ const Booking = require("../models/booking");
 const { addEventToCalendar } = require("./googleCalendar");
 const { sendCalendarLinkEmail } = require("./emailServices");
 const twilio = require("twilio");
+const { createICSFile } = require("./icsService");
+const { sendICSCalendarEmail } = require("./emailServices");
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -81,18 +83,23 @@ async function procesarReserva(datos) {
     console.error("❌ Error con Google Calendar:", calendarError.message);
   }
 
-  // ❌ Eliminamos envío de email con el enlace, ya que el cliente es invitado automáticamente como attendee
-  // if (email && email.trim() !== "") {
-  //   try {
-  //     console.log("✉️ Enviando email a:", email);
-  //     await sendCalendarLinkEmail(
-  //       email,
-  //       calendarLink || "https://calendar.google.com"
-  //     );
-  //   } catch (emailError) {
-  //     console.error("❌ Error al enviar correo:", emailError.message);
-  //   }
-  // }
+  if (email && email.trim() !== "") {
+    try {
+      const icsData = {
+        start: reserva.date,
+        time: reserva.time,
+        summary: reserva.terapiasType,
+        description: reserva.comentario,
+        location: "Wellness Flow, Málaga",
+      };
+
+      const { filePath, fileName } = await createICSFile(icsData);
+
+      await sendICSCalendarEmail(email, filePath, fileName);
+    } catch (icsEmailErr) {
+      console.error("❌ Error al enviar .ics:", icsEmailErr.message);
+    }
+  }
 
   // WhatsApp
   if (phoneNumber && phoneNumber.length >= 9) {
