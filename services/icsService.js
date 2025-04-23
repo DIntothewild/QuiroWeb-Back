@@ -32,4 +32,4 @@ function generateICSFile(booking) {
   });
 }
 
-module.exports = { generateICSFile };
+module.exports = { generateICSFile, generateICSFile };

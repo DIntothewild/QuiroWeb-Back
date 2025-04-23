@@ -2,7 +2,7 @@ const Booking = require("../models/booking");
 const { addEventToCalendar } = require("./googleCalendar");
 const { sendCalendarLinkEmail } = require("./emailServices");
 const twilio = require("twilio");
-const { createICSFile } = require("./icsService");
+const { generateICSFile } = require("./icsService");
 const { sendICSCalendarEmail } = require("./emailServices");
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -93,7 +93,7 @@ async function procesarReserva(datos) {
         location: "Wellness Flow, Málaga",
       };
 
-      const { filePath, fileName } = await createICSFile(icsData);
+      const { filePath, fileName } = await generateICSFile(icsData);
 
       await sendICSCalendarEmail(email, filePath, fileName);
     } catch (icsEmailErr) {
