@@ -2,10 +2,10 @@ const { writeFileSync } = require("fs");
 const { createEvent } = require("ics");
 const path = require("path");
 
-// Función para generar el archivo .ics
+// ✅ Función para generar el archivo .ics
 function generateICSFile(booking) {
   const [startHour, startMinute] = booking.time.split(":").map(Number);
-  const [year, month, day] = booking.date.split("-").map(Number);
+  const [year, month, day] = booking.date.toString().split("-").map(Number); // Asegura que es string
 
   const event = {
     title: `Reserva: ${booking.terapiasType}`,
@@ -32,4 +32,4 @@ function generateICSFile(booking) {
   });
 }
 
-module.exports = { generateICSFile, generateICSFile };
+module.exports = { generateICSFile };
