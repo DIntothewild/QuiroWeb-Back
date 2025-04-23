@@ -85,20 +85,12 @@ async function procesarReserva(datos) {
 
   if (email && email.trim() !== "") {
     try {
-      const icsData = {
-        start: reserva.date,
-        time: reserva.time,
-        summary: reserva.terapiasType,
-        description: reserva.comentario,
-        location: "Wellness Flow, Málaga",
-      };
-
-      const { filePath, fileName } = await generateICSFile(icsData);
-
+      const { filePath, fileName } = await generateICSFile(reserva);
       await sendICSCalendarEmail(email, filePath, fileName);
     } catch (icsEmailErr) {
       console.error("❌ Error al enviar .ics:", icsEmailErr.message);
     }
+    console.log(`📧 Archivo .ics enviado a: ${email}`);
   }
 
   // WhatsApp
