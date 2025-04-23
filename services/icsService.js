@@ -4,8 +4,16 @@ const path = require("path");
 
 // ✅ Función para generar el archivo .ics
 function generateICSFile(booking) {
-  const [startHour, startMinute] = booking.time.split(":").map(Number);
-  const [year, month, day] = booking.date.toString().split("-").map(Number); // Asegura que es string
+  const [startHour, startMinute] = booking.time?.split(":").map(Number) || [
+    0, 0,
+  ];
+
+  const dateParts =
+    typeof booking.date === "string"
+      ? booking.date.split("-").map(Number)
+      : [2025, 1, 1]; // valor por defecto si no hay fecha válida
+
+  const [year, month, day] = dateParts;
 
   const event = {
     title: `Reserva: ${booking.terapiasType}`,
