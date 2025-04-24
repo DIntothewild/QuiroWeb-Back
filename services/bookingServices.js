@@ -1,13 +1,9 @@
 const Booking = require("../models/booking");
 const { addEventToCalendar } = require("./googleCalendar");
-const { sendCalendarLinkEmail } = require("./emailServices");
-const twilio = require("twilio");
 const { generateICSFile } = require("./icsService");
 const { sendICSCalendarEmail } = require("./emailServices");
-
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const twilioClient = twilio(accountSid, authToken);
+const { sendWhatsAppMessage } = require("./whatsappService");
+const { logSuccess, logError } = require("./logger");
 
 async function procesarReserva(datos) {
   const {
@@ -35,6 +31,7 @@ async function procesarReserva(datos) {
     time,
     terapiasType,
   });
+
   if (duplicado) {
     throw new Error("Ya existe una reserva para esta fecha, hora y terapia.");
   }
@@ -73,42 +70,34 @@ async function procesarReserva(datos) {
   await reserva.save();
   console.log("✅ Reserva guardada:", reserva);
 
-  // Email y Calendar
-  let calendarLink = "";
+  // Calendar
   try {
     const calendarResponse = await addEventToCalendar(reserva);
-    calendarLink = calendarResponse.htmlLink;
+    const calendarLink = calendarResponse.htmlLink;
     console.log("✅ Evento en Google Calendar:", calendarLink);
+    logSuccess(`Evento creado en Google Calendar: ${calendarLink}`);
   } catch (calendarError) {
     console.error("❌ Error con Google Calendar:", calendarError.message);
   }
 
+  // Enviar archivo .ics por email
   if (email && email.trim() !== "") {
     try {
       const { filePath, fileName } = await generateICSFile(reserva);
       await sendICSCalendarEmail(email, filePath, fileName);
+      console.log(`📧 Archivo .ics enviado a: ${email}`);
     } catch (icsEmailErr) {
       console.error("❌ Error al enviar .ics:", icsEmailErr.message);
     }
-    console.log(`📧 Archivo .ics enviado a: ${email}`);
   }
 
   // WhatsApp
   if (phoneNumber && phoneNumber.length >= 9) {
-    const fullPhone = phoneNumber.startsWith("+")
-      ? phoneNumber
-      : `+34${phoneNumber}`;
-    const mensaje = `Hola ${customerName}, gracias por tu reserva en Wellness Flow 🌿. Te esperamos el ${date} a las ${time}.`;
-
     try {
-      await twilioClient.messages.create({
-        from: "whatsapp:+14155238886",
-        to: `whatsapp:${fullPhone}`,
-        body: mensaje,
-      });
-      console.log("📲 Mensaje WhatsApp enviado");
+      await sendWhatsAppMessage(reserva, "confirmation");
+      logSuccess("📲 Mensaje WhatsApp enviado");
     } catch (whatsErr) {
-      console.error("❌ Error al enviar WhatsApp:", whatsErr.message);
+      logError(`❌ Error al enviar WhatsApp: ${whatsErr.message}`);
     }
   }
 
