@@ -36,10 +36,24 @@ const Booking = require("../models/booking");
 const getAllBookings = async (req, res) => {
   try {
     const { date, terapiasType } = req.query;
-    let query = {};
-    if (date) query.date = date;
+
+    if (!date) {
+      return res.status(400).json({ error: "Missing date parameter" });
+    }
+
+    // 🛡️ Evitar caché del navegador o proxy
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    const query = { date };
     if (terapiasType) query.terapiasType = terapiasType;
+
     const bookings = await Booking.find(query);
+
     console.log(
       "getAllBookings ->",
       query,
@@ -47,10 +61,11 @@ const getAllBookings = async (req, res) => {
       bookings.length,
       "resultados"
     );
-    res.status(200).send(bookings);
+
+    res.status(200).json(bookings);
   } catch (error) {
     console.error("Error en getAllBookings:", error);
-    res.status(400).send({ error });
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 
