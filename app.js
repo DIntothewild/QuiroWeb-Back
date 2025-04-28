@@ -24,6 +24,8 @@ app.use(
       "http://localhost:3000",
       "https://wellnessflow.es",
       "http://wellnessflow.es",
+      "https://www.wellnessflow.es",
+      "http://www.wellnessflow.es",
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
