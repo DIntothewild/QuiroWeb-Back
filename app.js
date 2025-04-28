@@ -19,7 +19,12 @@ const app = express();
 app.use(logger("dev"));
 app.use(
   cors({
-    origin: ["https://quiro-web-front.vercel.app", "http://localhost:3000"],
+    origin: [
+      "https://quiro-web-front.vercel.app",
+      "http://localhost:3000",
+      "https://wellnessflow.es",
+      "http://wellnessflow.es",
+    ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"],
