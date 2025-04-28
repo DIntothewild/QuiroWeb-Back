@@ -34,6 +34,11 @@ app.use(cookieParser());
 app.use("/terapias", terapiasRouter);
 app.use("/bookings", bookingRouter);
 
+// --- health check route ---
+app.get("/healthz", (req, res) => {
+  res.status(200).send("OK");
+});
+
 // Levantamos el servidor en el puerto 3000
 // Conectamos con la base de datos y el servidor
 const main = async () => {
