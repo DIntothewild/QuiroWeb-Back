@@ -94,14 +94,27 @@ async function procesarReserva(datos) {
   // WhatsApp
   if (phoneNumber && phoneNumber.length >= 9) {
     try {
-      await sendWhatsAppMessage(reserva, "confirmation");
+      // Creamos un objeto específico para WhatsApp
+      const whatsappData = {
+        phoneNumber: phoneNumber,
+        customerName: customerName,
+        terapiasType: terapiasType,
+        date: date,
+        time: time,
+      };
+
+      console.log("📱 Datos para WhatsApp:", whatsappData);
+
+      await sendWhatsAppMessage(whatsappData, "confirmation");
       logSuccess("📲 Mensaje WhatsApp enviado");
     } catch (whatsErr) {
-      logError(`❌ Error al enviar WhatsApp: ${whatsErr.message}`);
+      logError(
+        `❌ Error al enviar WhatsApp (${whatsErr.code || "unknown"}): ${
+          whatsErr.message
+        }`
+      );
     }
   }
-
-  return reserva;
 }
 
 module.exports = {

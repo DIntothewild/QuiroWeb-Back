@@ -1,5 +1,4 @@
 // models/booking.js
-// models/booking.js
 const mongoose = require("mongoose");
 
 const bookingSchema = new mongoose.Schema({
@@ -14,6 +13,7 @@ const bookingSchema = new mongoose.Schema({
     default: "booked",
   },
   comentario: { type: String, required: false }, // Texto adicional
+  phoneNumber: { type: String }, // <-- Añadimos esta línea aquí
 });
 
 module.exports = mongoose.model("Booking", bookingSchema);

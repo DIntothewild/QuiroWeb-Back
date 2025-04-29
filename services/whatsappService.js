@@ -11,8 +11,14 @@ const client = twilio(accountSid, authToken);
 
 // 📦 Función principal
 async function sendWhatsAppMessage(booking, templateType = "confirmation") {
-  const phone = booking.phoneNumber?.replace(/\s+/g, "");
+  const phone = booking.phoneNumber?.replace(/\D/g, ""); // ❗ Elimina todo lo que no sea número
   const fullPhone = phone?.startsWith("+") ? phone : `+34${phone}`;
+
+  console.log("📞 Enviando WhatsApp a:", {
+    numero_original: booking.phoneNumber,
+    numero_limpio: phone,
+    numero_completo: fullPhone,
+  });
 
   if (!fullPhone || fullPhone.length < 10) {
     logWarning("Número de teléfono inválido para WhatsApp");
