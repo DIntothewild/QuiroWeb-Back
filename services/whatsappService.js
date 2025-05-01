@@ -11,8 +11,8 @@ const client = twilio(accountSid, authToken);
 
 // 📦 Función principal
 async function sendWhatsAppMessage(booking, templateType = "confirmation") {
-  const phone = booking.phoneNumber?.replace(/\D/g, ""); // ❗ Elimina todo lo que no sea número
-  const fullPhone = phone?.startsWith("+") ? phone : `+34${phone}`;
+  const phone = booking.phoneNumber?.replace(/\D/g, "");
+  const fullPhone = phone?.startsWith("34") ? `+${phone}` : `+34${phone}`;
 
   console.log("📞 Enviando WhatsApp a:", {
     numero_original: booking.phoneNumber,
@@ -31,7 +31,13 @@ async function sendWhatsAppMessage(booking, templateType = "confirmation") {
     const res = await client.messages.create({
       from: twilioPhoneNumber,
       to: `whatsapp:${fullPhone}`,
-      body: message,
+      contentSid: "HX0c9f3a05634a57e2805db0f4ef8d1f2", // ID de la plantilla
+      contentVariables: JSON.stringify({
+        1: customerName,
+        2: terapiasType,
+        3: date,
+        4: time,
+      }),
     });
 
     logSuccess(
