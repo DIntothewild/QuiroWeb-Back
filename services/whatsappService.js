@@ -11,6 +11,8 @@ const client = twilio(accountSid, authToken);
 
 // 📦 Función principal
 async function sendWhatsAppMessage(booking, templateType = "confirmation") {
+  const { customerName, terapiasType, dateTime } = booking;
+
   const phone = booking.phoneNumber?.replace(/\D/g, "");
   const fullPhone = phone?.startsWith("34") ? `+${phone}` : `+34${phone}`;
 
@@ -25,13 +27,14 @@ async function sendWhatsAppMessage(booking, templateType = "confirmation") {
     return;
   }
 
-  const message = getMessageTemplate(booking, templateType);
+  // Separar fecha y hora
+  const [date, time] = dateTime.split(" ");
 
   try {
     const res = await client.messages.create({
       from: twilioPhoneNumber,
       to: `whatsapp:${fullPhone}`,
-      contentSid: "HX0c9f3a05634a57e2805db0f4ef8d1f2", // ID de la plantilla
+      contentSid: "HX0c9f3a05634a57e2805db0f4ef8d1f2", // tu template ID
       contentVariables: JSON.stringify({
         1: customerName,
         2: terapiasType,
@@ -48,47 +51,6 @@ async function sendWhatsAppMessage(booking, templateType = "confirmation") {
       `❌ Error enviando WhatsApp (${templateType}) a ${fullPhone}: ${error.message}`
     );
     throw error;
-  }
-}
-
-// 🧾 Plantillas
-function getMessageTemplate(booking, type) {
-  const { customerName, terapiasType, date, time } = booking;
-  const [y, m, d] = date.split("-");
-  const fechaES = `${d}/${m}/${y}`;
-
-  switch (type) {
-    case "reminder":
-      return `¡Hola ${customerName}! 👋
-
-Te recordamos que mañana tienes una cita de *${terapiasType}* ⏰
-
-📅 Fecha: ${fechaES}
-⏰ Hora: ${time}
-
-¡Te esperamos en Wellness Flow! 🌿`;
-    case "cancellation":
-      return `Hola ${customerName},
-
-Tu cita de *${terapiasType}* para el día ${fechaES} a las ${time} ha sido *cancelada*.
-
-Si deseas reprogramar, puedes hacerlo desde nuestra web o contactándonos directamente.
-
-Gracias por tu comprensión.`;
-    case "confirmation":
-    default:
-      return `¡Hola ${customerName}! 👋
-
-Tu reserva de *${terapiasType}* ha sido confirmada ✅
-
-📅 Fecha: ${fechaES}
-⏰ Hora: ${time}
-
-Te esperamos en Wellness Flow 🌿
-
-Si necesitas cancelar o cambiar tu cita, por favor contáctanos con al menos 24 horas de antelación.
-
-¡Gracias por confiar en nosotros!`;
   }
 }
 
