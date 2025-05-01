@@ -11,30 +11,48 @@ const client = twilio(accountSid, authToken);
 
 // 📦 Función principal
 async function sendWhatsAppMessage(booking, templateType = "confirmation") {
-  const { customerName, terapiasType, dateTime } = booking;
+  if (!booking) {
+    logError("❌ No se recibió un objeto de reserva válido.");
+    return;
+  }
 
-  const phone = booking.phoneNumber?.replace(/\D/g, "");
-  const fullPhone = phone?.startsWith("34") ? `+${phone}` : `+34${phone}`;
+  const { customerName, terapiasType, dateTime, phoneNumber } = booking;
 
-  console.log("📞 Enviando WhatsApp a:", {
-    numero_original: booking.phoneNumber,
-    numero_limpio: phone,
-    numero_completo: fullPhone,
-  });
+  if (!customerName || !terapiasType || !dateTime || !phoneNumber) {
+    logError("❌ Faltan datos necesarios en la reserva:", booking);
+    return;
+  }
+
+  const phone = phoneNumber.replace(/\D/g, "");
+  const fullPhone = phone.startsWith("34") ? `+${phone}` : `+34${phone}`;
 
   if (!fullPhone || fullPhone.length < 10) {
     logWarning("Número de teléfono inválido para WhatsApp");
     return;
   }
 
-  // Separar fecha y hora
-  const [date, time] = dateTime.split(" ");
+  // Validación y extracción de fecha y hora
+  const dateTimeParts = dateTime.split(" ");
+  if (dateTimeParts.length !== 2) {
+    logError("❌ El formato de dateTime es incorrecto:", dateTime);
+    return;
+  }
+
+  const [date, time] = dateTimeParts;
+
+  console.log("📞 Enviando WhatsApp con plantilla:", {
+    to: fullPhone,
+    customerName,
+    terapiasType,
+    date,
+    time,
+  });
 
   try {
     const res = await client.messages.create({
       from: twilioPhoneNumber,
       to: `whatsapp:${fullPhone}`,
-      contentSid: "HX0c9f3a05634a57e2805db0f4ef8d1f2", // tu template ID
+      contentSid: "HX0c9f3a05634a57e2805db0f4ef8d1f2", // Tu plantilla aprobada
       contentVariables: JSON.stringify({
         1: customerName,
         2: terapiasType,
