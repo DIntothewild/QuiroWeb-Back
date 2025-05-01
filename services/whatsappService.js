@@ -11,14 +11,17 @@ const client = twilio(accountSid, authToken);
 
 // 📦 Función principal
 async function sendWhatsAppMessage(booking, templateType = "confirmation") {
-  if (!booking) {
+  if (!booking || typeof booking !== "object") {
     logError("❌ No se recibió un objeto de reserva válido.");
     return;
   }
 
-  const { customerName, terapiasType, dateTime, phoneNumber } = booking;
+  const { customerName, terapiasType, phoneNumber, dateTime, date, time } =
+    booking;
 
-  if (!customerName || !terapiasType || !dateTime || !phoneNumber) {
+  const fullDateTime = dateTime || (date && time ? `${date} ${time}` : null);
+
+  if (!customerName || !terapiasType || !phoneNumber || !fullDateTime) {
     logError("❌ Faltan datos necesarios en la reserva:", booking);
     return;
   }
@@ -26,38 +29,28 @@ async function sendWhatsAppMessage(booking, templateType = "confirmation") {
   const phone = phoneNumber.replace(/\D/g, "");
   const fullPhone = phone.startsWith("34") ? `+${phone}` : `+34${phone}`;
 
-  if (!fullPhone || fullPhone.length < 10) {
-    logWarning("Número de teléfono inválido para WhatsApp");
-    return;
-  }
-
-  // Validación y extracción de fecha y hora
-  const dateTimeParts = dateTime.split(" ");
-  if (dateTimeParts.length !== 2) {
-    logError("❌ El formato de dateTime es incorrecto:", dateTime);
-    return;
-  }
-
-  const [date, time] = dateTimeParts;
-
-  console.log("📞 Enviando WhatsApp con plantilla:", {
-    to: fullPhone,
-    customerName,
-    terapiasType,
-    date,
-    time,
+  console.log("📞 Enviando WhatsApp a:", {
+    numero_original: phoneNumber,
+    numero_limpio: phone,
+    numero_completo: fullPhone,
   });
+
+  const [fecha, hora] = fullDateTime.split(" ");
+  if (!fecha || !hora) {
+    logError("❌ El formato de dateTime es incorrecto:", fullDateTime);
+    return;
+  }
 
   try {
     const res = await client.messages.create({
       from: twilioPhoneNumber,
       to: `whatsapp:${fullPhone}`,
-      contentSid: "HX0c9f3a05634a57e2805db0f4ef8d1f2", // Tu plantilla aprobada
+      contentSid: "HX0c9f3a05634a57e2805db0f4ef8d1f2", // Tu template ID
       contentVariables: JSON.stringify({
         1: customerName,
         2: terapiasType,
-        3: date,
-        4: time,
+        3: fecha,
+        4: hora,
       }),
     });
 
