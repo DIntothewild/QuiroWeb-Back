@@ -36,7 +36,21 @@ async function sendWhatsAppMessage(params) {
 
   try {
     if (useTemplateFirst) {
-      logInfo(`🔄 Usando primero plantilla aprobada para +${fullPhone}`);
+      // ✅ Verificación de variables
+      logInfo("📋 Variables para plantilla:");
+      console.log({
+        customerName,
+        terapiasType,
+        date,
+        time,
+      });
+
+      if (!customerName || !terapiasType || !date || !time) {
+        logError(
+          "❌ Uno o más valores para la plantilla están vacíos o undefined"
+        );
+        return { success: false, error: "Datos incompletos para plantilla" };
+      }
 
       try {
         const message = await client.messages.create({
