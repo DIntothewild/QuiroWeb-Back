@@ -1,184 +1,286 @@
 // services/whatsappService.js
 const twilio = require("twilio");
-const { logSuccess, logError, logWarning } = require("../services/logger");
+const {
+  logSuccess,
+  logError,
+  logWarning,
+  logInfo,
+} = require("../services/logger");
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioPhoneNumber = `whatsapp:${
   process.env.TWILIO_WHATSAPP_NUMBER || "+14155238886"
 }`;
+const TWILIO_CONTENT_SID =
+  process.env.TWILIO_CONTENT_SID || "HX0c9f3a05634a57e2805db0f4ef8d1f2";
 
-// Verificar que las credenciales estén configuradas
+// Verificar credenciales
 if (!accountSid || !authToken) {
   logWarning("⚠️ Credenciales de Twilio no configuradas correctamente");
 }
 
+// Inicializar cliente de Twilio
 const client = twilio(accountSid, authToken);
 
-// 📦 Función principal
-async function sendWhatsAppMessage(booking, templateType = "confirmation") {
+/**
+ * Función principal mejorada que implementa una estrategia híbrida inteligente
+ * para maximizar la probabilidad de entrega de mensajes WhatsApp
+ *
+ * @param {Object} booking - Objeto con datos de la reserva
+ * @param {Object} options - Opciones adicionales
+ * @returns {Promise<string|null>} - SID del mensaje o null en caso de error
+ */
+async function sendWhatsAppMessage(booking, options = {}) {
+  // Validar entrada
   if (!booking || typeof booking !== "object") {
-    logError("❌ No se recibió un objeto de reserva válido.");
-    return;
+    logError("❌ No se recibió un objeto de reserva válido");
+    return null;
   }
 
-  const { customerName, terapiasType, phoneNumber, dateTime, date, time } =
-    booking;
+  const {
+    customerName,
+    terapiasType,
+    phoneNumber,
+    dateTime,
+    date,
+    time,
+    forceTemplate = false, // Opción para forzar uso de plantilla
+    recentInteraction = false, // Indicador si hubo interacción reciente
+  } = { ...booking, ...options };
 
-  // Comprobar que todos los campos necesarios existen
+  // Validar campos requeridos
   if (!customerName || !terapiasType || !phoneNumber) {
     logError("❌ Faltan datos necesarios en la reserva:", booking);
-    return;
+    return null;
   }
 
-  // Determinar la fecha y hora correctamente
+  // Procesar fecha y hora
   const fullDateTime = dateTime || (date && time ? `${date} ${time}` : null);
   if (!fullDateTime) {
     logError("❌ No se pudo determinar la fecha y hora de la reserva");
-    return;
+    return null;
   }
 
-  // Limpiar y formatear el número de teléfono correctamente
+  // Preparar número de teléfono
   let cleanPhone = phoneNumber.replace(/\D/g, "");
-  // Asegurar que el número comienza con el código de país
   const fullPhone = cleanPhone.startsWith("34")
     ? cleanPhone
     : `34${cleanPhone}`;
-
-  console.log("📞 Enviando WhatsApp a:", {
-    numero_original: phoneNumber,
-    numero_limpio: cleanPhone,
-    numero_completo: `+${fullPhone}`,
-  });
+  const formattedPhone = `whatsapp:+${fullPhone}`;
 
   // Extraer fecha y hora
   const [fecha, hora] = fullDateTime.split(" ");
   if (!fecha || !hora) {
     logError("❌ El formato de dateTime es incorrecto:", fullDateTime);
-    return;
+    return null;
   }
 
+  // ---- ESTRATEGIA INTELIGENTE ----
+  // 1. Si tenemos confirmación de interacción reciente (24h) o el usuario no quiere forzar plantilla:
+  //    intentamos primero con mensaje de formato libre (más flexible)
+  // 2. Si eso falla con error 63016, o si no hay interacción reciente confirmada:
+  //    usamos la plantilla aprobada (más confiable fuera de ventana 24h)
+  // 3. Si la plantilla falla, intentamos un mensaje básico como último recurso
+
+  // Determinar si usar primero plantilla o mensaje libre
+  const useTemplateFirst = forceTemplate || !recentInteraction;
+
   try {
-    // Solución temporal: Envía un mensaje de texto simple mientras la plantilla se aprueba
-    // Esto utilizará el método body en lugar de contentSid y contentVariables
-    const messageText = `¡Hola ${customerName}! 👋\n\nTu reserva de *${terapiasType}* ha sido confirmada ✅\n\n📅 Fecha: ${fecha}\n⏰ Hora: ${hora}\n\nSi necesitas cancelar o cambiar tu cita, por favor contáctanos.\n\n¡Gracias por confiar en Wellness Flow 🌿`;
+    // ESTRATEGIA A: Intentar primero con la plantilla aprobada
+    if (useTemplateFirst) {
+      logInfo(`🔄 Usando primero plantilla aprobada para +${fullPhone}`);
 
-    const res = await client.messages.create({
-      from: twilioPhoneNumber,
-      to: `whatsapp:+${fullPhone}`,
-      body: messageText,
-    });
+      try {
+        const templateRes = await sendWithApprovedTemplate(formattedPhone, {
+          customerName,
+          terapiasType,
+          fecha,
+          hora,
+        });
+        return templateRes;
+      } catch (templateError) {
+        // Si la plantilla falla, intentamos con mensaje directo como fallback
+        logWarning(
+          `⚠️ Error con plantilla. Intentando con mensaje directo: ${templateError.message}`
+        );
 
-    logSuccess(
-      `📲 Mensaje WhatsApp (${templateType}) enviado a +${fullPhone} (SID: ${res.sid})`
-    );
+        if (!recentInteraction) {
+          logWarning(
+            "⚠️ Sin confirmación de interacción reciente. Es posible que falle."
+          );
+        }
 
-    return res.sid;
+        const directRes = await sendWithDirectMessage(formattedPhone, {
+          customerName,
+          terapiasType,
+          fecha,
+          hora,
+        });
+        return directRes;
+      }
+    }
+    // ESTRATEGIA B: Intentar primero con mensaje directo (dentro de ventana 24h)
+    else {
+      logInfo(
+        `🔄 Usando primero mensaje directo para +${fullPhone} (interacción reciente)`
+      );
+
+      try {
+        const directRes = await sendWithDirectMessage(formattedPhone, {
+          customerName,
+          terapiasType,
+          fecha,
+          hora,
+        });
+        return directRes;
+      } catch (directError) {
+        // Si el error es 63016 (fuera de ventana 24h), intentamos con plantilla
+        if (
+          directError.code === 63016 ||
+          directError.message.includes("outside the allowed window")
+        ) {
+          logWarning(
+            "⚠️ Error 63016: Fuera de ventana 24h. Intentando con plantilla aprobada."
+          );
+
+          const templateRes = await sendWithApprovedTemplate(formattedPhone, {
+            customerName,
+            terapiasType,
+            fecha,
+            hora,
+          });
+          return templateRes;
+        } else {
+          // Otro tipo de error, lo propagamos
+          throw directError;
+        }
+      }
+    }
   } catch (error) {
-    logError(
-      `❌ Error enviando WhatsApp (${templateType}) a +${fullPhone}: ${error.message}`
-    );
+    // Manejo final de errores - último intento con mensaje muy básico
+    logError(`❌ Error enviando WhatsApp a +${fullPhone}: ${error.message}`);
 
-    // Registrar más detalles sobre el error
-    if (error.code) {
-      logError(`Código de error Twilio: ${error.code}`);
-    }
-    if (error.moreInfo) {
-      logError(`Más información: ${error.moreInfo}`);
-    }
-
-    // Implementar solución alternativa: enviar sin contentSid como fallback
     try {
-      logWarning("⚠️ Intentando enviar mensaje usando método alternativo...");
+      logWarning("⚠️ Último intento con mensaje básico de emergencia...");
 
-      // Crear mensaje de texto simple como respaldo
-      const fallbackMessage = `¡Hola ${customerName}! Tu reserva de ${terapiasType} para el ${fecha} a las ${hora} ha sido confirmada. Gracias por confiar en Wellness Flow.`;
+      const emergencyMessage = `Reserva confirmada: ${terapiasType}, ${fecha} ${hora}`;
 
       const fallbackRes = await client.messages.create({
         from: twilioPhoneNumber,
-        to: `whatsapp:+${fullPhone}`,
-        body: fallbackMessage,
+        to: formattedPhone,
+        body: emergencyMessage,
       });
 
       logSuccess(
-        `📲 Mensaje WhatsApp (fallback) enviado a +${fullPhone} (SID: ${fallbackRes.sid})`
+        `📲 WhatsApp (emergencia) enviado a +${fullPhone} (SID: ${fallbackRes.sid})`
       );
       return fallbackRes.sid;
-    } catch (fallbackError) {
-      logError(
-        `❌ Error enviando WhatsApp (fallback) a +${fullPhone}: ${fallbackError.message}`
-      );
-      throw error; // Lanzar el error original
+    } catch (emergencyError) {
+      logError(`❌ Todos los intentos fallaron para +${fullPhone}`);
+      // No lanzamos el error, la reserva seguirá creándose
+      return null;
     }
   }
 }
 
-// Función adicional para usar cuando se apruebe la plantilla
-async function sendWhatsAppWithTemplate(
-  booking,
-  templateType = "confirmation"
+/**
+ * Envía mensaje usando la plantilla aprobada de WhatsApp
+ * @private
+ */
+async function sendWithApprovedTemplate(
+  to,
+  { customerName, terapiasType, fecha, hora }
 ) {
-  if (!booking || typeof booking !== "object") {
-    logError("❌ No se recibió un objeto de reserva válido.");
-    return;
-  }
+  const res = await client.messages.create({
+    from: twilioPhoneNumber,
+    to: to,
+    contentSid: TWILIO_CONTENT_SID,
+    contentVariables: JSON.stringify({
+      1: customerName,
+      2: terapiasType,
+      3: fecha,
+      4: hora,
+    }),
+  });
 
-  const { customerName, terapiasType, phoneNumber, dateTime, date, time } =
-    booking;
+  logSuccess(`📲 WhatsApp con plantilla enviado a ${to} (SID: ${res.sid})`);
+  return res.sid;
+}
 
-  // Comprobar todos los campos necesarios
-  if (!customerName || !terapiasType || !phoneNumber) {
-    logError("❌ Faltan datos necesarios en la reserva:", booking);
-    return;
-  }
+/**
+ * Envía mensaje directo en formato libre (para usar dentro de ventana 24h)
+ * @private
+ */
+async function sendWithDirectMessage(
+  to,
+  { customerName, terapiasType, fecha, hora }
+) {
+  const bodyText = `¡Hola ${customerName}! 👋\n\nTu reserva de *${terapiasType}* ha sido confirmada ✅\n\n📅 Fecha: ${fecha}\n⏰ Hora: ${hora}\n\nSi necesitas cancelar o cambiar tu cita, por favor contáctanos.\n\n¡Gracias por confiar en Wellness Flow 🌿`;
 
-  const fullDateTime = dateTime || (date && time ? `${date} ${time}` : null);
-  if (!fullDateTime) {
-    logError("❌ No se pudo determinar la fecha y hora de la reserva");
-    return;
-  }
+  const res = await client.messages.create({
+    from: twilioPhoneNumber,
+    to: to,
+    body: bodyText,
+  });
 
-  let cleanPhone = phoneNumber.replace(/\D/g, "");
-  const fullPhone = cleanPhone.startsWith("34")
-    ? cleanPhone
-    : `34${cleanPhone}`;
+  logSuccess(`📲 WhatsApp directo enviado a ${to} (SID: ${res.sid})`);
+  return res.sid;
+}
 
-  // Extraer fecha y hora
-  const [fecha, hora] = fullDateTime.split(" ");
-  if (!fecha || !hora) {
-    logError("❌ El formato de dateTime es incorrecto:", fullDateTime);
-    return;
-  }
+/**
+ * Registra una interacción de usuario para seguimiento de ventana 24h
+ * Esta función debe llamarse cuando el usuario envía un mensaje a tu sistema
+ *
+ * @param {string} phoneNumber - Número de teléfono del usuario
+ * @returns {boolean} - Éxito del registro
+ */
+function registerUserInteraction(phoneNumber) {
+  // Aquí puedes implementar la lógica para registrar en base de datos
+  // cuando un usuario interactúa con tu sistema, para poder determinar
+  // más tarde si está dentro de la ventana de 24h
 
+  // Este es un ejemplo simple, en producción deberías guardar en BD
   try {
-    // Usar la plantilla una vez aprobada
-    const res = await client.messages.create({
-      from: twilioPhoneNumber,
-      to: `whatsapp:+${fullPhone}`,
-      contentSid:
-        process.env.TWILIO_CONTENT_SID || "HX0c9f3a05634a57e2805db0f4ef8d1f2",
-      contentVariables: JSON.stringify({
-        1: customerName,
-        2: terapiasType,
-        3: fecha,
-        4: hora,
-      }),
-    });
-
-    logSuccess(
-      `📲 Mensaje WhatsApp con plantilla (${templateType}) enviado a +${fullPhone} (SID: ${res.sid})`
+    // Ejemplo: guardar en memoria (para demostración)
+    // En producción: usar Redis, MongoDB, MySQL, etc.
+    const timestamp = new Date().toISOString();
+    console.log(
+      `📝 Registrando interacción de usuario ${phoneNumber} en ${timestamp}`
     );
 
-    return res.sid;
+    // Simulación de guardado exitoso
+    return true;
   } catch (error) {
-    logError(
-      `❌ Error enviando WhatsApp con plantilla (${templateType}) a +${fullPhone}: ${error.message}`
-    );
-    throw error;
+    logError(`❌ Error al registrar interacción: ${error.message}`);
+    return false;
+  }
+}
+
+/**
+ * Verifica si un usuario ha interactuado recientemente (últimas 24h)
+ *
+ * @param {string} phoneNumber - Número de teléfono a verificar
+ * @returns {Promise<boolean>} - True si hay interacción reciente
+ */
+async function hasRecentInteraction(phoneNumber) {
+  // Aquí implementarías la consulta a tu base de datos
+  // para determinar si el usuario ha interactuado en las últimas 24h
+
+  // Este es un ejemplo de implementación, deberías adaptarlo
+  // a tu sistema de almacenamiento real
+  try {
+    // Simulación de consulta (en producción: consulta a Redis/DB)
+    // Por defecto asumimos que no hay interacción reciente
+    return false;
+  } catch (error) {
+    logError(`❌ Error verificando interacciones: ${error.message}`);
+    return false; // Por seguridad, asumimos que no hay
   }
 }
 
 module.exports = {
   sendWhatsAppMessage,
-  sendWhatsAppWithTemplate,
+  registerUserInteraction,
+  hasRecentInteraction,
 };

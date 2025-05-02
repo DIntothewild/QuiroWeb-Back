@@ -105,7 +105,11 @@ async function procesarReserva(datos) {
 
       console.log("📱 Datos para WhatsApp:", whatsappData);
 
-      await sendWhatsAppMessage(whatsappData, "confirmation");
+      await sendWhatsAppMessage(whatsappData, {
+        forceTemplate: true,
+        recentInteraction: false, // ← puede ser true si implementas seguimiento
+      });
+
       logSuccess("📲 Mensaje WhatsApp enviado");
     } catch (whatsErr) {
       logError(
