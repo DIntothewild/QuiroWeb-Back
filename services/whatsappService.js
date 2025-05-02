@@ -63,49 +63,57 @@ async function sendWhatsAppMessage(params) {
         return { success: false, error: "Datos incompletos para plantilla" };
       }
 
-      // Intento 1 - JSON.stringify
+      // MÉTODO CORREGIDO - Usando definición robusta de variables
       try {
-        logInfo("🔄 Intento #1: Con JSON.stringify");
+        logInfo("🔄 Intento principal con formato correcto");
+
+        // Crear objeto con propiedades explícitas (resistente a problemas de comillas)
+        const variables = {};
+        variables["1"] = safeCustomerName;
+        variables["2"] = safeTerapiasType;
+        variables["3"] = safeDate;
+        variables["4"] = safeTime;
+
+        // Log para depuración
+        logInfo(`📤 Enviando variables: ${JSON.stringify(variables)}`);
+
         const message = await client.messages.create({
           from: twilioPhoneNumber,
           to: formattedPhone,
           contentSid: contentSid,
-          contentVariables: JSON.stringify({
-            1: safeCustomerName,
-            2: safeTerapiasType,
-            3: safeDate,
-            4: safeTime,
-          }),
+          contentVariables: variables,
         });
 
         logSuccess(`📲 Mensaje con plantilla enviado (SID: ${message.sid})`);
         return { success: true, messageSid: message.sid };
       } catch (error1) {
-        logWarning(`⚠️ Intento #1 falló: ${error1.message}`);
+        // Log detallado del error para mejor diagnóstico
+        logWarning(`⚠️ Intento principal falló: ${error1.message}`);
+        logInfo(`📋 Detalles del error: ${JSON.stringify(error1, null, 2)}`);
 
-        // Intento 2 - sin stringify
+        // Intento alternativo - usando bracket notation
         try {
-          logInfo("🔄 Intento #2: Sin JSON.stringify");
+          logInfo("🔄 Intento alternativo con bracket notation");
           const message = await client.messages.create({
             from: twilioPhoneNumber,
             to: formattedPhone,
             contentSid: contentSid,
             contentVariables: {
-              1: safeCustomerName,
-              2: safeTerapiasType,
-              3: safeDate,
-              4: safeTime,
+              ["1"]: safeCustomerName,
+              ["2"]: safeTerapiasType,
+              ["3"]: safeDate,
+              ["4"]: safeTime,
             },
           });
 
           logSuccess(`📲 Mensaje con plantilla enviado (SID: ${message.sid})`);
           return { success: true, messageSid: message.sid };
         } catch (error2) {
-          logWarning(`⚠️ Intento #2 falló: ${error2.message}`);
+          logWarning(`⚠️ Intento alternativo falló: ${error2.message}`);
 
-          // Intento 3 - formato alternativo de fecha
+          // Intento con formato de fecha alternativo
           try {
-            logInfo("🔄 Intento #3: Con formato de fecha diferente");
+            logInfo("🔄 Intento con formato de fecha diferente");
             const formattedDate = new Date(safeDate).toLocaleDateString(
               "es-ES",
               {
@@ -115,16 +123,17 @@ async function sendWhatsAppMessage(params) {
               }
             );
 
+            const dateVariables = {};
+            dateVariables["1"] = safeCustomerName;
+            dateVariables["2"] = safeTerapiasType;
+            dateVariables["3"] = formattedDate;
+            dateVariables["4"] = safeTime;
+
             const message = await client.messages.create({
               from: twilioPhoneNumber,
               to: formattedPhone,
               contentSid: contentSid,
-              contentVariables: JSON.stringify({
-                1: safeCustomerName,
-                2: safeTerapiasType,
-                3: formattedDate,
-                4: safeTime,
-              }),
+              contentVariables: dateVariables,
             });
 
             logSuccess(
@@ -132,8 +141,12 @@ async function sendWhatsAppMessage(params) {
             );
             return { success: true, messageSid: message.sid };
           } catch (error3) {
-            logWarning(`⚠️ Intento #3 falló: ${error3.message}`);
-            throw new Error("Todos los intentos con plantilla fallaron");
+            logWarning(
+              `⚠️ Intento con fecha alternativa falló: ${error3.message}`
+            );
+            logError(
+              "❌ Todos los intentos con plantilla fallaron, procediendo con mensaje libre"
+            );
           }
         }
       }
@@ -152,7 +165,7 @@ async function sendWhatsAppMessage(params) {
     logSuccess(
       `📲 Mensaje libre enviado como fallback (SID: ${fallbackRes.sid})`
     );
-    return { success: true, messageSid: fallbackRes.sid };
+    return { success: true, messageSid: fallbackRes.sid, usedFallback: true };
   } catch (finalError) {
     logError(
       `❌ Error final enviando WhatsApp a +${fullPhone}: ${finalError.message}`
