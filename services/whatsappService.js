@@ -1,4 +1,3 @@
-// services/whatsappService.js
 const twilio = require("twilio");
 const {
   logSuccess,
@@ -15,11 +14,23 @@ const fallbackSid = process.env.TWILIO_FALLBACK_TEMPLATE_SID;
 
 const client = twilio(accountSid, authToken);
 
-/**
- * Envía mensaje de WhatsApp usando plantillas de Twilio
- * @param {Object} params - Parámetros para el mensaje
- * @returns {Object} - Resultado de la operación
- */
+// 🔍 Función de inspección profunda para debug
+function deepInspect(obj, name = "") {
+  logInfo(`📋 Inspección profunda de ${name || "objeto"}:`);
+  try {
+    const str = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+    console.log(str);
+
+    if (typeof obj === "object" && obj !== null) {
+      Object.keys(obj).forEach((key) => {
+        console.log(`${key}: ${typeof obj[key]} - ${obj[key]}`);
+      });
+    }
+  } catch (e) {
+    console.log(`[Error inspeccionando]: ${e.message}`);
+  }
+}
+
 async function sendWhatsAppMessage(params) {
   const {
     customerName,
@@ -29,27 +40,22 @@ async function sendWhatsAppMessage(params) {
     time,
     forceTemplate = false,
     recentInteraction = false,
-    useMinimalTemplateOnly = false, // Nueva opción basada en tu propuesta
+    useMinimalTemplateOnly = false,
   } = params;
 
-  // Validar parámetros esenciales
   if (!phoneNumber) {
     logError("❌ Número de teléfono no proporcionado");
     return { success: false, error: "Número de teléfono requerido" };
   }
 
-  // Limpieza y formato del teléfono
   const cleanPhone = phoneNumber.replace(/\D/g, "");
   const fullPhone = cleanPhone.startsWith("34")
     ? cleanPhone
     : `34${cleanPhone}`;
   const formattedPhone = `whatsapp:+${fullPhone}`;
 
-  // Formateo de variables para la plantilla
   const safeCustomerName = (customerName || "").trim().substring(0, 50);
   const safeTerapiasType = (terapiasType || "").trim().substring(0, 30);
-
-  // Formateo específico de fecha para Twilio (DD/MM/YYYY)
   let safeDate = "";
   try {
     if (date) {
@@ -64,15 +70,12 @@ async function sendWhatsAppMessage(params) {
     safeDate = date || "";
     logWarning(`⚠️ Error al formatear fecha: ${e.message}`);
   }
-
   const safeTime = (time || "").trim();
 
   logInfo(`📤 Intentando enviar WhatsApp a +${fullPhone}`);
 
   try {
-    // Si useMinimalTemplateOnly es true, saltamos directamente a la plantilla básica
     if (!useMinimalTemplateOnly) {
-      // 1. INTENTO CON PLANTILLA PRINCIPAL
       if (contentSid) {
         logInfo(
           `🔑 Usando plantilla principal (ContentSID: ${contentSid.substring(
@@ -80,8 +83,6 @@ async function sendWhatsAppMessage(params) {
             10
           )}...)`
         );
-
-        // Debug: Mostrar variables
         logInfo("📋 Variables para plantilla:");
         console.log({
           customerName: safeCustomerName,
@@ -90,18 +91,21 @@ async function sendWhatsAppMessage(params) {
           time: safeTime,
         });
 
+        const contentVars = {
+          1: String(safeCustomerName),
+          2: String(safeTerapiasType),
+          3: String(safeDate),
+          4: String(safeTime),
+        };
+
+        deepInspect(contentVars, "contentVariables");
+
         try {
-          // Intentar enviar con contentVariables como JSON string
           const message = await client.messages.create({
             from: twilioPhoneNumber,
             to: formattedPhone,
             contentSid: contentSid,
-            contentVariables: JSON.stringify({
-              1: safeCustomerName,
-              2: safeTerapiasType,
-              3: safeDate,
-              4: safeTime,
-            }),
+            contentVariables: contentVars,
           });
 
           logSuccess(
@@ -113,7 +117,14 @@ async function sendWhatsAppMessage(params) {
             `⚠️ Error con plantilla principal: ${primaryError.message}`
           );
 
-          // Debug detallado del error
+          if (primaryError.response && primaryError.response.data) {
+            deepInspect(primaryError.response.data, "Twilio error data");
+          }
+
+          if (primaryError.config && primaryError.config.data) {
+            deepInspect(primaryError.config.data, "Payload enviado");
+          }
+
           if (primaryError.code) {
             logInfo(
               `📋 Código de error: ${primaryError.code}, Estado: ${primaryError.status}`
@@ -127,7 +138,7 @@ async function sendWhatsAppMessage(params) {
       );
     }
 
-    // 2. INTENTO CON PLANTILLA DE RESPALDO (MÍNIMA)
+    // Fallback a plantilla básica
     if (fallbackSid) {
       logInfo(
         `🔄 Intentando con plantilla básica (SID: ${fallbackSid.substring(
@@ -135,9 +146,7 @@ async function sendWhatsAppMessage(params) {
           10
         )}...)`
       );
-
       try {
-        // Para la plantilla básica, no enviamos variables ya que no las necesita
         const fallbackMessage = await client.messages.create({
           from: twilioPhoneNumber,
           to: formattedPhone,
@@ -154,19 +163,17 @@ async function sendWhatsAppMessage(params) {
         };
       } catch (fallbackError) {
         logWarning(`⚠️ Error con plantilla básica: ${fallbackError.message}`);
-        logInfo(
-          `📋 Detalles del error: ${JSON.stringify(fallbackError, null, 2)}`
-        );
+        if (fallbackError.response && fallbackError.response.data) {
+          deepInspect(fallbackError.response.data, "Twilio fallback error");
+        }
       }
     }
 
-    // 3. ÚLTIMO RECURSO: MENSAJE SIMPLE (SOLO FUNCIONA DENTRO DE LA VENTANA DE 24H)
-    // Verificamos si estamos en la ventana de 24h o es una respuesta
+    // Último recurso: mensaje libre (solo si hay interacción reciente)
     if (recentInteraction) {
       try {
         logInfo(`🔄 Intentando enviar mensaje simple como último recurso`);
 
-        // Crear mensaje simple personalizado
         const simpleBody = `¡Hola ${safeCustomerName}! Tu reserva de ${safeTerapiasType} para el ${safeDate} a las ${safeTime} ha sido confirmada. Gracias por confiar en Wellness Flow.`;
 
         const simpleMessage = await client.messages.create({
@@ -190,7 +197,6 @@ async function sendWhatsAppMessage(params) {
       );
     }
 
-    // Si llegamos aquí, ninguna opción funcionó
     throw new Error(
       "No se pudo enviar ningún tipo de mensaje después de intentar todas las opciones"
     );
@@ -206,33 +212,8 @@ async function sendWhatsAppMessage(params) {
   }
 }
 
-/**
- * Verifica si el usuario está dentro de la ventana de 24h para mensajes
- * @param {String} phoneNumber - Número de teléfono a verificar
- * @returns {Promise<Boolean>} - True si está dentro de la ventana
- */
 async function checkIfWithin24hWindow(phoneNumber) {
-  try {
-    // En una implementación real, consultarías tu base de datos
-    // para ver cuándo fue la última interacción con este número
-
-    // Ejemplo: Consultar la colección de mensajes o interacciones
-    // const lastInteraction = await db.collection('interactions')
-    //   .findOne({ phoneNumber }, { sort: { timestamp: -1 } });
-    //
-    // if (!lastInteraction) return false;
-    //
-    // const hoursSinceLastInteraction =
-    //   (Date.now() - lastInteraction.timestamp) / (1000 * 60 * 60);
-    //
-    // return hoursSinceLastInteraction <= 24;
-
-    // Por ahora, devolvemos false como en tu ejemplo
-    return false;
-  } catch (error) {
-    logError(`❌ Error verificando ventana de 24h: ${error.message}`);
-    return false; // Por seguridad, asumimos que no está en la ventana
-  }
+  return false; // En producción deberías consultar tu base de datos
 }
 
 module.exports = {
