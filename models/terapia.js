@@ -53,11 +53,6 @@ const terapiaSchema = new mongoose.Schema({
     trim: true,
     default: null, // Solo aplicable si la terapia es "quiromasaje"
   },
-  zonaDelCuerpo: {
-    type: String,
-    trim: true,
-    default: null, // Solo aplicable si la terapia es "osteopatia"
-  },
 });
 
 module.exports = mongoose.model("Terapia", terapiaSchema);

@@ -10,7 +10,6 @@ const createTerapia = async (req, res) => {
       duration,
       comentarios,
       tipoDeMasaje,
-      zonaDelCuerpo,
       type,
     } = req.body;
 
@@ -33,7 +32,6 @@ const createTerapia = async (req, res) => {
       duration,
       comentarios: comentarios || [],
       tipoDeMasaje: type === "quiromasaje" ? tipoDeMasaje : null,
-      zonaDelCuerpo: type === "osteopatia" ? zonaDelCuerpo : null,
     });
 
     await newTerapia.save();

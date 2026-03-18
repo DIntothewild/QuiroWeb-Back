@@ -6,6 +6,7 @@ const cookieParser = require("cookie-parser");
 const terapiasRouter = require("./routes/terapiasRouter");
 const bookingRouter = require("./routes/bookingRouter");
 const mongodbConnection = require("./services/db");
+const incomingRouter = require("./routes/incomingRouter");
 
 // Añadimos el método config de dotenv para utilizar las variables de entorno
 dotenv.config();
@@ -45,6 +46,9 @@ app.use("/bookings", bookingRouter);
 app.get("/healthz", (req, res) => {
   res.status(200).send("OK");
 });
+
+// --- incoming messages route ---
+app.use("/webhook", incomingRouter);
 
 // Levantamos el servidor en el puerto 3000
 // Conectamos con la base de datos y el servidor

@@ -1,62 +1,52 @@
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 const fs = require("fs");
 
-// Transporter básico usando una cuenta de Gmail
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Función para enviar el correo
 async function sendCalendarLinkEmail(toEmail, calendarLink) {
-  const mailOptions = {
-    from: '"Wellness Flow" <wellssflow@gmail.com>',
-    to: toEmail,
-    subject: "Tu cita ha sido reservada - Añádela a tu calendario",
-    html: `
-      <h2>Gracias por tu reserva</h2>
-      <p>Puedes añadirla a tu Google Calendar con este enlace:</p>
-      <a href="${calendarLink}" target="_blank">${calendarLink}</a>
-    `,
-  };
-
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log("✉️ Correo enviado:", info.response);
+    const { error } = await resend.emails.send({
+      from: "Wellness Flow <onboarding@resend.dev>",
+      to: toEmail,
+      subject: "Tu cita ha sido reservada - Añádela a tu calendario",
+      html: `
+        <h2>Gracias por tu reserva</h2>
+        <p>Puedes añadirla a tu Google Calendar con este enlace:</p>
+        <a href="${calendarLink}" target="_blank">${calendarLink}</a>
+      `,
+    });
+    if (error) throw error;
+    console.log("✉️ Correo enviado a:", toEmail);
   } catch (error) {
-    console.error("❌ Error al enviar el correo:", error);
+    console.error("❌ Error al enviar correo:", error);
+    throw error;
   }
 }
 
-// ✅ NUEVA función para enviar archivo ICS adjunto
 async function sendICSCalendarEmail(toEmail, filePath, fileName) {
-  const mailOptions = {
-    from: '"Wellness Flow" <wellssflow@gmail.com>',
-    to: toEmail,
-    subject: "Tu reserva en Wellness Flow - Añádela a tu calendario",
-    html: `
-      <h2>Gracias por tu reserva</h2>
-      <p>Adjunto encontrarás el archivo para añadir tu cita a tu calendario.</p>
-    `,
-    attachments: [
-      {
-        filename: fileName,
-        path: filePath,
-        contentType: "text/calendar",
-      },
-    ],
-  };
-
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log("📩 Correo con .ics enviado:", info.response);
+    const fileContent = fs.readFileSync(filePath);
+    const { error } = await resend.emails.send({
+      from: "Wellness Flow <onboarding@resend.dev>",
+      to: toEmail,
+      subject: "Tu reserva en Wellness Flow - Añádela a tu calendario",
+      html: `
+        <h2>Gracias por tu reserva</h2>
+        <p>Adjunto encontrarás el archivo para añadir tu cita a tu calendario.</p>
+      `,
+      attachments: [
+        {
+          filename: fileName,
+          content: fileContent,
+        },
+      ],
+    });
+    if (error) throw error;
+    console.log("📩 Correo con .ics enviado a:", toEmail);
   } catch (error) {
     console.error("❌ Error al enviar correo con .ics:", error);
+    throw error;
   } finally {
-    // 🧹 Limpieza del archivo temporal
     try {
       fs.unlinkSync(filePath);
       console.log("🧹 Archivo .ics eliminado:", filePath);
@@ -65,4 +55,5 @@ async function sendICSCalendarEmail(toEmail, filePath, fileName) {
     }
   }
 }
+
 module.exports = { sendCalendarLinkEmail, sendICSCalendarEmail };
