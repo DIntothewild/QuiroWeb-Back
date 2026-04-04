@@ -53,6 +53,19 @@ const terapiaSchema = new mongoose.Schema({
     trim: true,
     default: null, // Solo aplicable si la terapia es "quiromasaje"
   },
+  descripcionLarga: {
+  type: String,
+  default: "",
+},
+galeria: {
+  type: [String], // array de URLs de imágenes
+  default: [],
+},
+profesional: {
+  nombre: { type: String, default: "" },
+  bio: { type: String, default: "" },
+  foto: { type: String, default: "" }, // URL de la foto
+},
 });
 
 module.exports = mongoose.model("Terapia", terapiaSchema);

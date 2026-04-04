@@ -139,11 +139,26 @@ const deleteTerapia = async (req, res) => {
   }
 };
 
+// Obtener una terapia por tipo (ej: "quiromasaje")
+const getTerapiaByType = async (req, res) => {
+  try {
+    const terapia = await Terapia.findOne({ type: req.params.type });
+    if (!terapia) {
+      return res.status(404).json({ message: "Terapia no encontrada." });
+    }
+    res.status(200).json(terapia);
+  } catch (error) {
+    console.error("Error al obtener la terapia por tipo:", error);
+    res.status(500).json({ message: "Error interno del servidor.", error });
+  }
+};
+
 // Exportar las funciones del controlador
 module.exports = {
   createTerapia,
   getAllTerapias,
   getTerapiaById,
+  getTerapiaByType,
   updateTerapia,
   deleteTerapia,
 };
