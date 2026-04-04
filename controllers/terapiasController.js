@@ -142,7 +142,7 @@ const deleteTerapia = async (req, res) => {
 // Obtener una terapia por tipo (ej: "quiromasaje")
 const getTerapiaByType = async (req, res) => {
   try {
-    const terapia = await Terapia.findOne({ type: req.params.type });
+    const terapia = await Terapia.findOne({ name: "Quiromasaje" });
     if (!terapia) {
       return res.status(404).json({ message: "Terapia no encontrada." });
     }
